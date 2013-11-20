@@ -1,0 +1,10 @@
+.project
+.classpath
+.settings
+target
+*.patch
+*.class
+*.pyc
+nb-configuration.xml
+*.*~
+.DS_Store
