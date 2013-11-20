@@ -23,6 +23,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.apache.commons.dbcp.BasicDataSource;
+import org.geotools.data.DataAccessFactory.Param;
 import org.geotools.data.jdbc.datasource.DBCPDataSource;
 import org.geotools.jdbc.JDBCDataStore;
 import org.geotools.jdbc.JDBCDataStoreFactory;
@@ -30,26 +31,19 @@ import org.geotools.jdbc.SQLDialect;
 
 
 /**
- * DataStoreFacotry for H2 database.
+ * DataStoreFacotry for MonetDB database
  *
- * @author Justin Deoliveira, The Open Planning Project
- *
- *
- *
+ * @author Dennis Pallett
  *
  * @source $URL$
  */
 public class MonetDBDataStoreFactory extends JDBCDataStoreFactory {
     /** parameter for database type */
-    public static final Param DBTYPE = new Param("dbtype", String.class, "Type", true, "h2");
+    public static final Param DBTYPE = new Param("dbtype", String.class, "Type", true, "monetdb");
     
-    /** parameter for how to handle associations */
-    public static final Param ASSOCIATIONS = new Param("Associations", Boolean.class,
-            "Associations", false, Boolean.FALSE);
-
     /** optional user parameter */
     public static final Param USER = new Param(JDBCDataStoreFactory.USER.key, JDBCDataStoreFactory.USER.type, 
-            JDBCDataStoreFactory.USER.description, false, JDBCDataStoreFactory.USER.sample);
+            JDBCDataStoreFactory.USER.description, false, "monetdb");
 
     /** optional host parameter */
     public static final Param HOST = new Param(JDBCDataStoreFactory.HOST.key, JDBCDataStoreFactory.HOST.type, 
@@ -57,50 +51,19 @@ public class MonetDBDataStoreFactory extends JDBCDataStoreFactory {
 
     /** optional port parameter */
     public static final Param PORT = new Param(JDBCDataStoreFactory.PORT.key, JDBCDataStoreFactory.PORT.type, 
-            JDBCDataStoreFactory.PORT.description, false, 9902);
-
-    /**
-     * base location to store h2 database files
-     */
-    File baseDirectory = null;
-
-    /**
-     * Sets the base location to store h2 database files.
-     *
-     * @param baseDirectory A directory.
-     */
-    public void setBaseDirectory(File baseDirectory) {
-        this.baseDirectory = baseDirectory;
-    }
-
-    /**
-     * The base location to store h2 database files.
-     */
-    public File getBaseDirectory() {
-        return baseDirectory;
-    }
+            JDBCDataStoreFactory.PORT.description, false, 50000);
     
+    /** parameter for database schema */
+    public static final Param SCHEMA = new Param("schema", String.class, "Schema", false, "sys");
+
+   
     protected void setupParameters(Map parameters) {
+    	// NOTE: when adding parameters here remember to add them to MonetDBJNDIDataStoreFactory
+    	
         super.setupParameters(parameters);
-
-        //remove host and port temporarily in order to make username optional
-        parameters.remove(JDBCDataStoreFactory.HOST.key);
+        
         parameters.remove(JDBCDataStoreFactory.PORT.key);
-        
-        parameters.put(HOST.key, HOST);
         parameters.put(PORT.key, PORT);
-
-        //remove user and password temporarily in order to make username optional
-        parameters.remove(JDBCDataStoreFactory.USER.key);
-        parameters.remove(PASSWD.key);
-        
-        parameters.put(USER.key, USER);
-        parameters.put(PASSWD.key, PASSWD);
-        
-        //add user 
-        //add additional parameters
-        parameters.put(ASSOCIATIONS.key, ASSOCIATIONS);
-        parameters.put(DBTYPE.key, DBTYPE);
     }
 
     public String getDisplayName() {
@@ -108,7 +71,7 @@ public class MonetDBDataStoreFactory extends JDBCDataStoreFactory {
     }
 
     public String getDescription() {
-        return "MonetDB";
+        return "MonetDB/GeoSpatial database";
     }
 
     protected String getDatabaseID() {
@@ -116,78 +79,29 @@ public class MonetDBDataStoreFactory extends JDBCDataStoreFactory {
     }
 
     protected String getDriverClassName() {
-        return "org.h2.Driver";
+        return "nl.cwi.monetdb.jdbc.MonetDriver";
     }
 
     protected SQLDialect createSQLDialect(JDBCDataStore dataStore) {
-		return null;
-        //return new H2DialectBasic(dataStore);
-        //return new H2DialectPrepared(dataStore);
+    	 return new MonetDBDialect(dataStore);
     }
 
-    protected DataSource createDataSource(Map params, SQLDialect dialect) throws IOException {
-        String database = (String) DATABASE.lookUp(params);
-        String host = (String) HOST.lookUp(params);
-        BasicDataSource dataSource = new BasicDataSource();
-        
-        if (host != null && !host.equals("")) {
-            Integer port = (Integer) PORT.lookUp(params);
-            if (port != null && !port.equals("")) {
-                dataSource.setUrl("jdbc:h2:tcp://" + host + ":" + port + "/" + database);
-            }
-            else {
-                dataSource.setUrl("jdbc:h2:tcp://" + host + "/" + database);
-            }
-        } else if (baseDirectory == null) {
-            //use current working directory
-            dataSource.setUrl("jdbc:h2:" + database + ";AUTO_SERVER=TRUE");
-        } else {
-            //use directory specified if the patch is relative
-            String location;
-            if (!new File(database).isAbsolute()) {
-                location = new File(baseDirectory, database).getAbsolutePath();    
-            }
-            else {
-                location = database;
-            }
-
-            dataSource.setUrl("jdbc:h2:file:" + location + ";AUTO_SERVER=TRUE");
-        }
-        
-        String username = (String) USER.lookUp(params);
-        if (username != null) {
-            dataSource.setUsername(username);
-        }
-        String password = (String) PASSWD.lookUp(params);
-        if (password != null) {
-            dataSource.setPassword(password);
-        }
-        
-        dataSource.setDriverClassName("org.h2.Driver");
-        dataSource.setPoolPreparedStatements(false);
-        
-        
-
-        return new DBCPDataSource(dataSource);
-    }
-
-    protected JDBCDataStore createDataStoreInternal(JDBCDataStore dataStore, Map params)
-        throws IOException {
-        //check the foreign keys parameter
-        Boolean foreignKeys = (Boolean) ASSOCIATIONS.lookUp(params);
-
-        if (foreignKeys != null) {
-            dataStore.setAssociations(foreignKeys.booleanValue());
-        }
-
-        return dataStore;
-    }
-
-    @Override
+     @Override
     protected String getValidationQuery() {
-        // no need for this until we are using H2 embedded, there is no
-        // network connection that can fail
-        return null;
+    	return "select now()";
     }
    
+    @Override
+    protected String getJDBCUrl(Map params) throws IOException {
+        String host = (String) HOST.lookUp(params);
+        String db = (String) DATABASE.lookUp(params);
+        
+        Object portObj = PORT.lookUp(params);
+        if (portObj == null) {
+        	portObj = PORT.sample;
+        }
+        
+        int port = (Integer) portObj;
+        return "jdbc:monetdb" + "://" + host + ":" + port + "/" + db;
+    }
 }
