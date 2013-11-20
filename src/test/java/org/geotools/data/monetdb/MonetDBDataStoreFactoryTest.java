@@ -78,7 +78,7 @@ public class MonetDBDataStoreFactoryTest extends TestCase {
         catch(Exception fail) {
         	fail("Should have made a connection.");
         }
-        
+                
         ds.dispose();
     }
 }

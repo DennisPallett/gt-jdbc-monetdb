@@ -18,16 +18,22 @@ package org.geotools.data.monetdb;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import javax.sql.DataSource;
 
 import org.apache.commons.dbcp.BasicDataSource;
 import org.geotools.data.DataAccessFactory.Param;
+import org.geotools.data.DataStore;
+import org.geotools.data.DataStoreFinder;
+import org.geotools.data.FeatureSource;
+import org.geotools.data.Query;
 import org.geotools.data.jdbc.datasource.DBCPDataSource;
 import org.geotools.jdbc.JDBCDataStore;
 import org.geotools.jdbc.JDBCDataStoreFactory;
 import org.geotools.jdbc.SQLDialect;
+import org.opengis.feature.simple.SimpleFeatureType;
 
 
 /**
@@ -103,5 +109,28 @@ public class MonetDBDataStoreFactory extends JDBCDataStoreFactory {
         
         int port = (Integer) portObj;
         return "jdbc:monetdb" + "://" + host + ":" + port + "/" + db;
+    }
+    
+    public static void main (String[] args) throws Exception {
+    	Map<String,Object> params = new HashMap<String,Object>();
+        params.put( "dbtype", "monetdb");
+        params.put( "host", "localhost");
+        params.put( "database", "test");
+        params.put( "user", "monetdb");
+        params.put( "passwd", "monetdb");
+        
+        DataStore dataStore = (new MonetDBDataStoreFactory()).createDataStore( params );
+        if (dataStore == null) {
+        	throw new Exception("Unable to create datastore!");
+        }        
+        System.out.println("DataStore created!");
+        
+        FeatureSource fsBC = dataStore.getFeatureSource("nyc_buildings");
+        
+        System.out.println("bc count: " + fsBC.getCount(Query.ALL));
+        
+        
+        
+        dataStore.dispose();
     }
 }

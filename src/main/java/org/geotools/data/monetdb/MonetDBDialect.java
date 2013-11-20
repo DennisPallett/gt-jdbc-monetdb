@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.geotools.data.jdbc.FilterToSQL;
 import org.geotools.factory.Hints;
@@ -112,6 +114,31 @@ public class MonetDBDialect extends BasicSQLDialect {
     static final Version PGSQL_V_9_0 = new Version("9.0");
     
     static final Version PGSQL_V_9_1 = new Version("9.1");
+    
+    public static String quoteValue (String value) {
+    	if (value == null) value = "";
+		return "'" + value.replaceAll("\\\\", "\\\\\\\\").replaceAll("'", "\\\\'") + "'";
+	}
+	
+	public static String quoteIdentifier (String ident) {
+		// prepare identifier
+		ident = prepareIdentifier(ident);
+		
+		// make sure identifier is actually quoted
+		ident = "\"" + ident + "\"";
+		
+		return ident;
+	}
+	
+	public static String prepareIdentifier (String ident) {
+		// MonetDB only supports lowercase identifiers
+		ident = ident.toLowerCase();
+		
+		// MonetDB doesn't support any special characters so replace with underscore
+		ident = ident.replaceAll("[^a-zA-Z0-9]+","_");
+		
+		return ident;
+	}
 
     public MonetDBDialect(JDBCDataStore dataStore) {
         super(dataStore);
@@ -125,37 +152,9 @@ public class MonetDBDialect extends BasicSQLDialect {
     
     Version version, pgsqlVersion;
 
-    public boolean isLooseBBOXEnabled() {
-        return looseBBOXEnabled;
-    }
-
-    public void setLooseBBOXEnabled(boolean looseBBOXEnabled) {
-        this.looseBBOXEnabled = looseBBOXEnabled;
-    }
-        
-    public boolean isEstimatedExtentsEnabled() {
-        return estimatedExtentsEnabled;
-    }
-
-    public void setEstimatedExtentsEnabled(boolean estimatedExtentsEnabled) {
-        this.estimatedExtentsEnabled = estimatedExtentsEnabled;
-    }
-    
-    public boolean isFunctionEncodingEnabled() {
-        return functionEncodingEnabled;
-    }
-
-    /**
-     * @see PostgisNGDataStoreFactory#ENCODE_FUNCTIONS
-     */
-    public void setFunctionEncodingEnabled(boolean functionEncodingEnabled) {
-        this.functionEncodingEnabled = functionEncodingEnabled;
-    }
-
     @Override
     public void initializeConnection(Connection cx) throws SQLException {
         super.initializeConnection(cx);
-        getPostgreSQLVersion(cx);
     }
 
     @Override
@@ -336,72 +335,6 @@ public class MonetDBDialect extends BasicSQLDialect {
     }
 
     @Override
-    public Class<?> getMapping(ResultSet columnMetaData, Connection cx)
-            throws SQLException {
-        
-        String typeName = columnMetaData.getString("TYPE_NAME");
-        if("uuid".equalsIgnoreCase(typeName)) {
-            return UUID.class;
-        }
-        
-        String gType = null;
-        if ("geometry".equalsIgnoreCase(typeName)) {
-            gType = lookupGeometryType(columnMetaData, cx, "geometry_columns", "f_geometry_column");
-        } else if ("geography".equalsIgnoreCase(typeName)) {
-            gType = lookupGeometryType(columnMetaData, cx, "geography_columns", "f_geography_column");
-        } else {
-            return null;
-        }
-       
-        // decode the type into
-        if(gType == null) {
-            // it's either a generic geography or geometry not registered in the medatata tables
-            return Geometry.class;
-        } else {
-            Class geometryClass = (Class) TYPE_TO_CLASS_MAP.get(gType.toUpperCase());
-            if (geometryClass == null) {
-                geometryClass = Geometry.class;
-            }
-    
-            return geometryClass;
-        }
-    }
-
-    String lookupGeometryType(ResultSet columnMetaData, Connection cx, String gTableName, 
-            String gColumnName) throws SQLException {
-        
-        // grab the information we need to proceed
-        String tableName = columnMetaData.getString("TABLE_NAME");
-        String columnName = columnMetaData.getString("COLUMN_NAME");
-        String schemaName = columnMetaData.getString("TABLE_SCHEM");
-
-        // first attempt, try with the geometry metadata
-        Connection conn = null;
-        Statement statement = null;
-        ResultSet result = null;
-        
-        try {
-            String sqlStatement = "SELECT TYPE FROM " + gTableName + " WHERE " //
-                    + "F_TABLE_SCHEMA = '" + schemaName + "' " //
-                    + "AND F_TABLE_NAME = '" + tableName + "' " //
-                    + "AND " + gColumnName + " = '" + columnName + "'";
-
-            LOGGER.log(Level.FINE, "Geometry type check; {0} ", sqlStatement);
-            statement = cx.createStatement();
-            result = statement.executeQuery(sqlStatement);
-
-            if (result.next()) {
-                return result.getString(1);
-            }
-        } finally {
-            dataStore.closeSafe(result);
-            dataStore.closeSafe(statement);
-        }
-
-        return null;
-    }
-    
-    @Override
     public void handleUserDefinedType(ResultSet columnMetaData, ColumnMetadata metadata,
             Connection cx) throws SQLException {
 
@@ -435,39 +368,15 @@ public class MonetDBDialect extends BasicSQLDialect {
     @Override
     public Integer getGeometrySRID(String schemaName, String tableName,
             String columnName, Connection cx) throws SQLException {
-
+   	
         // first attempt, try with the geometry metadata
         Statement statement = null;
         ResultSet result = null;
         Integer srid = null;
         try {
             if (schemaName == null)
-                schemaName = "public";
-            
-            // try geography_columns
-            if(supportsGeography(cx)) {
-                try {
-                    //first look for an entry in geography_columns, if there return 4326
-                    String sqlStatement = "SELECT SRID FROM GEOGRAPHY_COLUMNS WHERE " //
-                        + "F_TABLE_SCHEMA = '" + schemaName + "' " //
-                        + "AND F_TABLE_NAME = '" + tableName + "' " //
-                        + "AND F_GEOGRAPHY_COLUMN = '" + columnName + "'";
-                    LOGGER.log(Level.FINE, "Geography srid check; {0} ", sqlStatement);
-                    statement = cx.createStatement();
-                    result = statement.executeQuery(sqlStatement);
-        
-                    if (result.next()) {
-                        return 4326;
-                    }
-                } catch(SQLException e) {
-                    LOGGER.log(Level.WARNING, "Failed to retrieve information about " 
-                            + schemaName + "." + tableName + "."  + columnName 
-                            + " from the geometry_columns table, checking geometry_columns instead", e);
-                } finally {
-                    dataStore.closeSafe(result);
-                }
-            }
-            
+                schemaName = "sys";
+          
             // try geometry_columns
             try {
                 String sqlStatement = "SELECT SRID FROM GEOMETRY_COLUMNS WHERE " //
@@ -491,13 +400,9 @@ public class MonetDBDialect extends BasicSQLDialect {
             }
             
             // fall back on inspection of the first geometry, assuming uniform srid (fair assumption
-            // an unpredictable srid makes the table un-queriable)
-            //JD: In postgis 2.0 forward there is no way to leave a geometry srid unset since 
-            // geometry_columns is a view populated from system tables, so we check for 0 and take
-            // that to mean unset
-      
-            if(srid == null || (getVersion(cx).compareTo(V_2_0_0) >= 0 && srid == 0)) {
-                String sqlStatement = "SELECT ST_SRID(\"" + columnName + "\") " +
+            // an unpredictable srid makes the table un-queriable)      
+            if(srid == null) {
+                String sqlStatement = "SELECT SRID(\"" + columnName + "\") " +
                                "FROM \"" + schemaName + "\".\"" + tableName + "\" " +
                                "WHERE \"" + columnName + "\" IS NOT NULL " +
                                "LIMIT 1";
@@ -519,18 +424,34 @@ public class MonetDBDialect extends BasicSQLDialect {
             String columnName, Connection cx) throws SQLException {
         Statement st = cx.createStatement();
         try {
-            // pg_get_serial_sequence oddity: table name needs to be
-            // escaped with "", whilst column name, doesn't...
-            String sql = "SELECT pg_get_serial_sequence('\"";
-            if(schemaName != null && !"".equals(schemaName))
-                sql += schemaName + "\".\"";
-            sql += tableName + "\"', '" + columnName + "')";
-
+        	String sql = "SELECT " + quoteIdentifier("default") + " FROM \"sys\".\"_columns\" AS columns" +	
+        				" INNER JOIN sys._tables AS tables ON columns.table_id = tables.id";
+        	
+        	if (schemaName != null && schemaName.length() > 0) {
+        		sql += " INNER JOIN sys.schemas AS schemas ON tables.schema_id = schemas.id" +
+        				" WHERE schemas.name = " + quoteValue(schemaName);
+        	} else {
+        		sql += " WHERE 1=1";
+        	}
+        	
+        	sql += " AND tables.name = " + quoteValue(tableName) + 
+        		   " AND columns.name = " + quoteValue(columnName);
+        	
             dataStore.getLogger().fine(sql);
             ResultSet rs = st.executeQuery(sql);
             try {
                 if (rs.next()) {
-                    return rs.getString(1);
+                	String defaultValue = rs.getString(1);
+                	
+                	Pattern regex = Pattern.compile("\"seq_(.*?)\"");
+                	Matcher m = regex.matcher(defaultValue);
+                	
+                	String seqName = null;
+                	while(m.find()) {
+                		seqName = "seq_" + m.group(1);
+                	}
+
+                	return seqName;
                 }
             } finally {
                 dataStore.closeSafe(rs);
@@ -610,6 +531,7 @@ public class MonetDBDialect extends BasicSQLDialect {
             Map<String, Class<?>> mappings) {
         super.registerSqlTypeNameToClassMappings(mappings);
 
+        mappings.put("multipolygon", MultiPolygon.class);
         mappings.put("geometry", Geometry.class);
         mappings.put("geography", Geometry.class);
         mappings.put("text", String.class);
@@ -835,11 +757,8 @@ public class MonetDBDialect extends BasicSQLDialect {
 
     @Override
     public FilterToSQL createFilterToSQL() {
-        /*PostgisFilterToSQL sql = new PostgisFilterToSQL(this);
-        sql.setLooseBBOXEnabled(looseBBOXEnabled);
-        sql.setFunctionEncodingEnabled(functionEncodingEnabled);
-        return sql;*/
-    	return null;
+    	MonetDBFilterToSQL sql = new MonetDBFilterToSQL(this);
+    	return sql;
     }
     
     @Override
@@ -949,11 +868,6 @@ public class MonetDBDialect extends BasicSQLDialect {
         }
         return pgsqlVersion;
     }
-    /**
-     * Returns true if the PostGIS version is >= 1.5.0
-     */
-    boolean supportsGeography(Connection cx) throws SQLException {
-        return getVersion(cx).compareTo(V_1_5_0) >= 0;
-    }
+
     
 }
