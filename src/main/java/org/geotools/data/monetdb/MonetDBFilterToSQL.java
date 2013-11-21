@@ -22,7 +22,6 @@ import org.geotools.data.jdbc.FilterToSQL;
 import org.geotools.filter.FilterCapabilities;
 import org.geotools.jdbc.JDBCDataStore;
 import org.opengis.feature.type.GeometryDescriptor;
-import org.opengis.filter.expression.Add;
 import org.opengis.filter.expression.Expression;
 import org.opengis.filter.expression.Function;
 import org.opengis.filter.expression.Literal;

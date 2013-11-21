@@ -30,9 +30,13 @@ import org.geotools.data.DataStoreFinder;
 import org.geotools.data.FeatureSource;
 import org.geotools.data.Query;
 import org.geotools.data.jdbc.datasource.DBCPDataSource;
+import org.geotools.feature.FeatureCollection;
+import org.geotools.feature.FeatureIterator;
 import org.geotools.jdbc.JDBCDataStore;
 import org.geotools.jdbc.JDBCDataStoreFactory;
 import org.geotools.jdbc.SQLDialect;
+import org.opengis.feature.Feature;
+import org.opengis.feature.GeometryAttribute;
 import org.opengis.feature.simple.SimpleFeatureType;
 
 
@@ -125,9 +129,30 @@ public class MonetDBDataStoreFactory extends JDBCDataStoreFactory {
         }        
         System.out.println("DataStore created!");
         
-        FeatureSource fsBC = dataStore.getFeatureSource("nyc_buildings");
+        FeatureSource fsBuildings = dataStore.getFeatureSource("nyc_buildings");
         
-        System.out.println("bc count: " + fsBC.getCount(Query.ALL));
+        //System.out.println("bc count: " + fsBC.getCount(Query.ALL));
+        
+        System.out.println(fsBuildings.getSchema().getGeometryDescriptor());
+        
+        Query query = Query.ALL;
+        query.setMaxFeatures(10);
+        FeatureCollection collection = fsBuildings.getFeatures(query);
+        
+        System.out.println(collection.getBounds());
+        
+        FeatureIterator iter = collection.features();
+        int counter = 0;
+        while(iter.hasNext()) {
+        	Feature feature = iter.next();
+        	
+        	//System.out.println(feature);
+        	
+        	GeometryAttribute geom = feature.getDefaultGeometryProperty();
+        	
+        	counter++;
+        	if (counter >= 10) break;
+        }
         
         
         

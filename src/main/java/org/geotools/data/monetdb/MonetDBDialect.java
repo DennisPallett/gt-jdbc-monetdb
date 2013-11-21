@@ -18,17 +18,12 @@ package org.geotools.data.monetdb;
 
 import java.io.IOException;
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Savepoint;
 import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -37,16 +32,13 @@ import java.util.regex.Pattern;
 
 import org.geotools.data.jdbc.FilterToSQL;
 import org.geotools.factory.Hints;
-import org.geotools.geometry.jts.ReferencedEnvelope;
 import org.geotools.jdbc.BasicSQLDialect;
 import org.geotools.jdbc.ColumnMetadata;
 import org.geotools.jdbc.JDBCDataStore;
 import org.geotools.referencing.CRS;
-import org.geotools.util.Version;
 import org.opengis.feature.simple.SimpleFeatureType;
 import org.opengis.feature.type.AttributeDescriptor;
 import org.opengis.feature.type.GeometryDescriptor;
-import org.opengis.referencing.crs.CoordinateReferenceSystem;
 
 import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Geometry;
@@ -69,52 +61,6 @@ import com.vividsolutions.jts.io.WKTReader;
  */
 public class MonetDBDialect extends BasicSQLDialect {
 
-	//geometry type to class map
-    final static Map<String, Class> TYPE_TO_CLASS_MAP = new HashMap<String, Class>() {
-        {
-            put("GEOMETRY", Geometry.class);
-            put("GEOGRAPHY", Geometry.class);
-            put("POINT", Point.class);
-            put("POINTM", Point.class);
-            put("LINESTRING", LineString.class);
-            put("LINESTRINGM", LineString.class);
-            put("POLYGON", Polygon.class);
-            put("POLYGONM", Polygon.class);
-            put("MULTIPOINT", MultiPoint.class);
-            put("MULTIPOINTM", MultiPoint.class);
-            put("MULTILINESTRING", MultiLineString.class);
-            put("MULTILINESTRINGM", MultiLineString.class);
-            put("MULTIPOLYGON", MultiPolygon.class);
-            put("MULTIPOLYGONM", MultiPolygon.class);
-            put("GEOMETRYCOLLECTION", GeometryCollection.class);
-            put("GEOMETRYCOLLECTIONM", GeometryCollection.class);
-            put("BYTEA", byte[].class);
-        }
-    };
-
-    //geometry class to type map
-    final static Map<Class, String> CLASS_TO_TYPE_MAP = new HashMap<Class, String>() {
-        {
-            put(Geometry.class, "GEOMETRY");
-            put(Point.class, "POINT");
-            put(LineString.class, "LINESTRING");
-            put(Polygon.class, "POLYGON");
-            put(MultiPoint.class, "MULTIPOINT");
-            put(MultiLineString.class, "MULTILINESTRING");
-            put(MultiPolygon.class, "MULTIPOLYGON");
-            put(GeometryCollection.class, "GEOMETRYCOLLECTION");
-            put(byte[].class, "BYTEA");
-        }
-    };
-    
-    static final Version V_1_5_0 = new Version("1.5.0");
-
-    static final Version V_2_0_0 = new Version("2.0.0");
-
-    static final Version PGSQL_V_9_0 = new Version("9.0");
-    
-    static final Version PGSQL_V_9_1 = new Version("9.1");
-    
     public static String quoteValue (String value) {
     	if (value == null) value = "";
 		return "'" + value.replaceAll("\\\\", "\\\\\\\\").replaceAll("'", "\\\\'") + "'";
@@ -144,14 +90,6 @@ public class MonetDBDialect extends BasicSQLDialect {
         super(dataStore);
     }
 
-    boolean looseBBOXEnabled = false;
-
-    boolean estimatedExtentsEnabled = false;
-    
-    boolean functionEncodingEnabled = false;
-    
-    Version version, pgsqlVersion;
-
     @Override
     public void initializeConnection(Connection cx) throws SQLException {
         super.initializeConnection(cx);
@@ -164,12 +102,6 @@ public class MonetDBDialect extends BasicSQLDialect {
             return false;
         } else if (tableName.startsWith("spatial_ref_sys")) {
             return false;
-        } else if (tableName.equals("geography_columns")) {
-            return false;
-        } else if (tableName.equals("raster_columns")) {
-            return false;
-        } else if (tableName.equals("raster_overviews")) {
-            return false;
         }
 
         if (schemaName != null && schemaName.equals("topology")) {
@@ -179,39 +111,34 @@ public class MonetDBDialect extends BasicSQLDialect {
         return true;
     }
 
-    //ThreadLocal<WKBAttributeIO> wkbReader = new ThreadLocal<WKBAttributeIO>();
+    ThreadLocal<WKTAttributeIO> wktReader = new ThreadLocal<WKTAttributeIO>();
 
     @Override
     public Geometry decodeGeometryValue(GeometryDescriptor descriptor,
             ResultSet rs, String column, GeometryFactory factory, Connection cx)
             throws IOException, SQLException {
-        //WKBAttributeIO reader = getWKBReader(factory);
-        
-       // return (Geometry) reader.read(rs, column);
-    	return null;
+    	WKTAttributeIO reader = getWKTReader(factory);
+    	return (Geometry) reader.read(rs, column);
     }
     
+    @Override
     public Geometry decodeGeometryValue(GeometryDescriptor descriptor,
             ResultSet rs, int column, GeometryFactory factory, Connection cx)
             throws IOException, SQLException {
-        //WKBAttributeIO reader = getWKBReader(factory);
-        
-        //return (Geometry) reader.read(rs, column);
-    	return null;
+    	WKTAttributeIO reader = getWKTReader(factory);        
+    	return (Geometry) reader.read(rs, column);
     }
-
-    /*private WKBAttributeIO getWKBReader(GeometryFactory factory) {
-        /*WKBAttributeIO reader = wkbReader.get();
-        if(reader == null) {
-            reader = new WKBAttributeIO(factory);
-            wkbReader.set(reader);
+    
+    private WKTAttributeIO getWKTReader (GeometryFactory factory) {
+    	WKTAttributeIO reader = wktReader.get();
+    	if(reader == null) {
+            reader = new WKTAttributeIO(factory);
+            wktReader.set(reader);
         }  else {
             reader.setGeometryFactory(factory);
         }
         return reader;
-        
-    	return null;
-    }*/
+    }
 
     @Override
     public void encodeGeometryColumn(GeometryDescriptor gatt, String prefix, int srid,
@@ -222,100 +149,13 @@ public class MonetDBDialect extends BasicSQLDialect {
     @Override
     public void encodeGeometryColumn(GeometryDescriptor gatt, String prefix, int srid, Hints hints, 
         StringBuffer sql) {
-    
-        boolean geography = "geography".equals(gatt.getUserData().get(
-                JDBCDataStore.JDBC_NATIVE_TYPENAME));
-    
-        if (geography) {
-            sql.append("encode(ST_AsBinary(");
-            encodeColumnName(prefix, gatt.getLocalName(), sql);
-            sql.append("),'base64')");
-        }
-        else {
-            boolean force2D = hints != null && hints.containsKey(Hints.FEATURE_2D) && 
-                Boolean.TRUE.equals(hints.get(Hints.FEATURE_2D));
-
-            if (force2D) {
-                sql.append("encode(ST_AsBinary(ST_Force_2D(");
-                encodeColumnName(prefix, gatt.getLocalName(), sql);
-                sql.append(")),'base64')");
-            } else {
-                sql.append("encode(ST_AsEWKB(");
-                encodeColumnName(prefix, gatt.getLocalName(), sql);
-                sql.append("),'base64')");
-            }
-        }
+        encodeColumnName(prefix, gatt.getLocalName(), sql);  
     }
 
     @Override
     public void encodeGeometryEnvelope(String tableName, String geometryColumn,
             StringBuffer sql) {
-        sql.append("ST_AsText(ST_Force_2D(ST_Envelope(");
-        sql.append("ST_Extent(\"" + geometryColumn + "\"::geometry))))");
-    }
-    
-    @Override
-    public List<ReferencedEnvelope> getOptimizedBounds(String schema, SimpleFeatureType featureType,
-            Connection cx) throws SQLException, IOException {
-        if (!estimatedExtentsEnabled)
-            return null;
-
-        String tableName = featureType.getTypeName();
-
-        Statement st = null;
-        ResultSet rs = null;
-
-        List<ReferencedEnvelope> result = new ArrayList<ReferencedEnvelope>();
-        Savepoint savePoint = null;
-        try {
-            st = cx.createStatement();
-            if(!cx.getAutoCommit()) {
-                savePoint = cx.setSavepoint();
-            }
-
-            for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
-                if (att instanceof GeometryDescriptor) {
-                    // use estimated extent (optimizer statistics)
-                    StringBuffer sql = new StringBuffer();
-                    sql.append("select ST_AsText(ST_force_2d(ST_Envelope(ST_Estimated_Extent('");
-                    if(schema != null) {
-                        sql.append(schema);
-                        sql.append("', '");
-                    }
-                    sql.append(tableName);
-                    sql.append("', '");
-                    sql.append(att.getName().getLocalPart());
-                    sql.append("'))))");
-                    rs = st.executeQuery(sql.toString());
-
-                    if (rs.next()) {
-                        // decode the geometry
-                        Envelope env = decodeGeometryEnvelope(rs, 1, cx);
-
-                        // reproject and merge
-                        if (!env.isNull()) {
-                            CoordinateReferenceSystem crs = ((GeometryDescriptor) att)
-                                    .getCoordinateReferenceSystem();
-                            result.add(new ReferencedEnvelope(env, crs));
-                        }
-                    }
-                    rs.close();
-                }
-            }
-        } catch(SQLException e) {
-            if(savePoint != null) {
-                cx.rollback(savePoint);
-            }
-            LOGGER.log(Level.WARNING, "Failed to use ST_Estimated_Extent, falling back on envelope aggregation", e);
-            return null;
-        } finally {
-            if(savePoint != null) {
-                cx.releaseSavepoint(savePoint);
-            }
-            dataStore.closeSafe(rs);
-            dataStore.closeSafe(st);
-        } 
-        return result;
+        sql.append("Envelope(\"" + geometryColumn + "\")");
     }
 
     @Override
@@ -379,10 +219,10 @@ public class MonetDBDialect extends BasicSQLDialect {
           
             // try geometry_columns
             try {
-                String sqlStatement = "SELECT SRID FROM GEOMETRY_COLUMNS WHERE " //
-                        + "F_TABLE_SCHEMA = '" + schemaName + "' " //
-                        + "AND F_TABLE_NAME = '" + tableName + "' " //
-                        + "AND F_GEOMETRY_COLUMN = '" + columnName + "'";
+                String sqlStatement = "SELECT srid FROM geometry_columns WHERE " //
+                        + "f_table_schema = '" + schemaName + "' " //
+                        + "AND f_table_name = '" + tableName + "' " //
+                        + "AND f_geometry_column = '" + columnName + "'";
     
                 LOGGER.log(Level.FINE, "Geometry srid check; {0} ", sqlStatement);
                 statement = cx.createStatement();
@@ -400,7 +240,8 @@ public class MonetDBDialect extends BasicSQLDialect {
             }
             
             // fall back on inspection of the first geometry, assuming uniform srid (fair assumption
-            // an unpredictable srid makes the table un-queriable)      
+            // an unpredictable srid makes the table un-queriable)     
+            // Pallett (2013): unfortunately this will fail because MonetDB never returns SRID for a geometry
             if(srid == null) {
                 String sqlStatement = "SELECT SRID(\"" + columnName + "\") " +
                                "FROM \"" + schemaName + "\".\"" + tableName + "\" " +
@@ -531,9 +372,14 @@ public class MonetDBDialect extends BasicSQLDialect {
             Map<String, Class<?>> mappings) {
         super.registerSqlTypeNameToClassMappings(mappings);
 
+        mappings.put("point", Point.class);
+        mappings.put("linestring", LineString.class);
+        mappings.put("polygon", Polygon.class);
+        mappings.put("multipoint", MultiPoint.class);
+        mappings.put("multilinestring", MultiLineString.class);
         mappings.put("multipolygon", MultiPolygon.class);
+        mappings.put("geomcollection", GeometryCollection.class);
         mappings.put("geometry", Geometry.class);
-        mappings.put("geography", Geometry.class);
         mappings.put("text", String.class);
         mappings.put("int8", Long.class);
         mappings.put("int4", Integer.class);
@@ -610,47 +456,34 @@ public class MonetDBDialect extends BasicSQLDialect {
                     int dimensions = 2;
 
                     // grab the geometry type
-                    String geomType = CLASS_TO_TYPE_MAP.get(gd.getType()
-                            .getBinding());
+                    String geomType = null;
                     if (geomType == null)
                         geomType = "GEOMETRY";
 
                     String sql = null;
-                    if (getVersion(cx).compareTo(V_2_0_0) >= 0) {
-                        // postgis 2 and up we don't muck with geometry_columns, we just alter the
-                        // type directly to set the geometry type and srid
-                        //setup the geometry type
-                        sql = 
-                            "ALTER TABLE \"" + schemaName + "\".\"" + tableName + "\" " + 
-                             "ALTER COLUMN \"" + gd.getLocalName() + "\" " + 
-                             "TYPE geometry (" + geomType + ", " + srid + ");";
-                        
-                        LOGGER.fine( sql );
-                        st.execute( sql );
-                    }
-                    else {
-                        // register the geometry type, first remove and eventual
-                        // leftover, then write out the real one
-                        sql = 
-                        "DELETE FROM GEOMETRY_COLUMNS"
-                                + " WHERE f_table_catalog=''" //
-                                + " AND f_table_schema = '" + schemaName + "'" //
-                                + " AND f_table_name = '" + tableName + "'" // 
-                                + " AND f_geometry_column = '" + gd.getLocalName() + "'";
-                        
-                        LOGGER.fine( sql );
-                        st.execute( sql );
-                        
-                        sql = "INSERT INTO GEOMETRY_COLUMNS VALUES (''," //
-                                + "'" + schemaName + "'," //
-                                + "'" + tableName + "'," //
-                                + "'" + gd.getLocalName() + "'," //
-                                + dimensions + "," //
-                                + srid + "," //
-                                + "'" + geomType + "')";
-                        LOGGER.fine( sql );
-                        st.execute( sql );
-                    }
+                   
+                    // register the geometry type, first remove and eventual
+                    // leftover, then write out the real one
+                    sql = 
+                    "DELETE FROM GEOMETRY_COLUMNS"
+                            + " WHERE f_table_catalog=''" //
+                            + " AND f_table_schema = '" + schemaName + "'" //
+                            + " AND f_table_name = '" + tableName + "'" // 
+                            + " AND f_geometry_column = '" + gd.getLocalName() + "'";
+                    
+                    LOGGER.fine( sql );
+                    st.execute( sql );
+                    
+                    sql = "INSERT INTO GEOMETRY_COLUMNS VALUES (''," //
+                            + "'" + schemaName + "'," //
+                            + "'" + tableName + "'," //
+                            + "'" + gd.getLocalName() + "'," //
+                            + dimensions + "," //
+                            + srid + "," //
+                            + "'" + geomType + "')";
+                    LOGGER.fine( sql );
+                    st.execute( sql );
+                    
 
                     // add srid checks
                     if (srid > -1) {
@@ -747,11 +580,11 @@ public class MonetDBDialect extends BasicSQLDialect {
             sql.append("NULL");
         } else {
             if (value instanceof LinearRing) {
-                //postgis does not handle linear rings, convert to just a line string
+                // monetdb does not handle linear rings, convert to just a line string
                 value = value.getFactory().createLineString(((LinearRing) value).getCoordinateSequence());
             }
             
-            sql.append("ST_GeomFromText('" + value.toText() + "', " + srid + ")");
+            sql.append("GeomFromText('" + value.toText() + "', " + srid + ")");
         }
     }
 
@@ -780,19 +613,7 @@ public class MonetDBDialect extends BasicSQLDialect {
     
     @Override
     public void encodeValue(Object value, Class type, StringBuffer sql) {
-        if(byte[].class.equals(type)) {
-            byte[] input = (byte[]) value;
-            //check postgres version, if > 9 default encoding is hex
-            if (pgsqlVersion.compareTo(PGSQL_V_9_1) >= 0) {
-                encodeByteArrayAsHex(input, sql);
-            }
-            else {
-                encodeByteArrayAsEscape(input, sql);
-            }
-
-        } else {
-            super.encodeValue(value, type, sql);
-        }
+        // TODO: implement this method
     }
 
     void encodeByteArrayAsHex(byte[] input, StringBuffer sql) {
@@ -834,40 +655,7 @@ public class MonetDBDialect extends BasicSQLDialect {
         return -1;
     }
 
-    /**
-     * Returns the PostGIS version
-     * @return
-     */
-    public Version getVersion(Connection conn) throws SQLException {
-        if(version == null) {
-            Statement st = null;
-            ResultSet rs = null;
-            try {
-                st = conn.createStatement();
-                rs = st.executeQuery("select PostGIS_Lib_Version()");
-                if(rs.next()) {
-                    version = new Version(rs.getString(1));
-                } 
-            } finally {
-                dataStore.closeSafe(rs);
-                dataStore.closeSafe(st);
-            }
-        }
-        
-        return version;
-    }
+   
 
-    /**
-     * Returns the PostgreSQL version
-     */
-    public Version getPostgreSQLVersion(Connection conn) throws SQLException {
-        if (pgsqlVersion == null) {
-            DatabaseMetaData md = conn.getMetaData();
-            pgsqlVersion = new Version(
-                String.format("%d.%d", md.getDatabaseMajorVersion(), md.getDatabaseMinorVersion()));
-        }
-        return pgsqlVersion;
-    }
-
-    
+       
 }

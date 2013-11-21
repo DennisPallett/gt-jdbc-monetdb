@@ -16,11 +16,6 @@
  */
 package org.geotools.data.monetdb;
 
-import static org.geotools.data.monetdb.MonetDBDataStoreFactory.*;
-
-import java.io.File;
-import java.util.Map;
-
 import org.geotools.jdbc.JDBCJNDIDataStoreFactory;
 
 /**
@@ -32,6 +27,7 @@ import org.geotools.jdbc.JDBCJNDIDataStoreFactory;
  *
  * @source $URL$
  */
+@SuppressWarnings("unchecked")
 public class MonetDBJNDIDataStoreFactory extends JDBCJNDIDataStoreFactory {
 
     public MonetDBJNDIDataStoreFactory() {
