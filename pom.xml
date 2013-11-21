@@ -70,14 +70,10 @@
       <version>0.7-RC2</version>
       <exclusions>
         <exclusion>
-          <groupId>com.h2database</groupId>
-          <artifactId>h2</artifactId>
+          <groupId>monetdb</groupId>
+          <artifactId>monetdb-jdbc</artifactId>
         </exclusion>
       </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>com.h2database</groupId>
-      <artifactId>h2</artifactId>
     </dependency>
 
 	<!-- MonetDB JDBC driver -->

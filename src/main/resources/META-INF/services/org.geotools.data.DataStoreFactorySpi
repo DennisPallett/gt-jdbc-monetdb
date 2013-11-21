@@ -1,0 +1,2 @@
+org.geotools.data.monetdb.MonetDBDataStoreFactory
+org.geotools.data.monetdb.MonetDBJNDIDataStoreFactory
