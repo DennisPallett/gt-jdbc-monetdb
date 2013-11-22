@@ -54,24 +54,18 @@ public class MonetDBFilterToSQL extends FilterToSQL {
             //postgis does not handle linear rings, convert to just a line string
             geom = geom.getFactory().createLineString(((LinearRing) geom).getCoordinateSequence());
         }
-        
-        Object typename = currentGeometry.getUserData().get(JDBCDataStore.JDBC_NATIVE_TYPENAME);
-        if("geography".equals(typename)) {
-            out.write("ST_GeogFromText('");
-            out.write(geom.toText());
-            out.write("')");
+                
+        out.write("GeomFromText('");
+        out.write(geom.toText());
+        if(currentSRID == null && currentGeometry  != null) {
+            // if we don't know at all, use the srid of the geometry we're comparing against
+            // (much slower since that has to be extracted record by record as opposed to 
+            // being a constant)
+            out.write("', SRID(\"" + currentGeometry.getLocalName() + "\"))");
         } else {
-            out.write("ST_GeomFromText('");
-            out.write(geom.toText());
-            if(currentSRID == null && currentGeometry  != null) {
-                // if we don't know at all, use the srid of the geometry we're comparing against
-                // (much slower since that has to be extracted record by record as opposed to 
-                // being a constant)
-                out.write("', ST_SRID(\"" + currentGeometry.getLocalName() + "\"))");
-            } else {
-                out.write("', " + currentSRID + ")");
-            }
+            out.write("', " + currentSRID + ")");
         }
+        
     }
 
     @Override

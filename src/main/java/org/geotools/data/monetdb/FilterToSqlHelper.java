@@ -218,7 +218,7 @@ class FilterToSqlHelper {
         }
         if ((filter instanceof DWithin && swapped)
                 || (filter instanceof Beyond && !swapped)) {
-            out.write("ST_Distance(");
+            out.write("Distance(");
             property.accept(delegate, extraData);
             out.write(",");
             geometry.accept(delegate, extraData);
@@ -262,18 +262,16 @@ class FilterToSqlHelper {
         }
         
         // add && filter if possible
-        if(!(filter instanceof Disjoint)) {
+       /* if(!(filter instanceof Disjoint)) {
             
+        	out.write("Overlaps(");
             property.accept(delegate, extraData);
-            out.write(" && ");
+            out.write(", ");
             geometry.accept(delegate, extraData);
-    
-            // if we're just encoding a bbox in loose mode, we're done 
-            if(filter instanceof BBOX && looseBBOXEnabled)
-                return;
+            out.write(")");
                 
             out.write(" AND ");
-        }
+        }*/
 
         visitBinarySpatialOperator(filter, (Expression)property, (Expression)geometry, swapped, extraData);
     }
@@ -283,28 +281,28 @@ class FilterToSqlHelper {
         
         String closingParenthesis = ")";
         if (filter instanceof Equals) {
-            out.write("ST_Equals");
+            out.write("Equals");
         } else if (filter instanceof Disjoint) {
-            out.write("NOT (ST_Intersects");
+            out.write("NOT (\"Intersect\"");
             closingParenthesis += ")";
         } else if (filter instanceof Intersects || filter instanceof BBOX) {
-            out.write("ST_Intersects");
+            out.write("\"Intersect\"");
         } else if (filter instanceof Crosses) {
-            out.write("ST_Crosses");
+            out.write("Crosses");
         } else if (filter instanceof Within) {
             if(swapped)
-                out.write("ST_Contains");
+                out.write("Contains");
             else
-                out.write("ST_Within");
+                out.write("Within");
         } else if (filter instanceof Contains) {
             if(swapped)
-                out.write("ST_Within");
+                out.write("Within");
             else
-                out.write("ST_Contains");
+                out.write("Contains");
         } else if (filter instanceof Overlaps) {
-            out.write("ST_Overlaps");
+            out.write("Overlaps");
         } else if (filter instanceof Touches) {
-            out.write("ST_Touches");
+            out.write("Touches");
         } else {
             throw new RuntimeException("Unsupported filter type " + filter.getClass());
         }
