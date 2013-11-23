@@ -64,7 +64,7 @@ public class MonetDBDataStoreFactory extends JDBCDataStoreFactory {
             JDBCDataStoreFactory.PORT.description, false, 50000);
     
     /** parameter for database schema */
-    public static final Param SCHEMA = new Param("schema", String.class, "Schema", false, "sys");
+    public static final Param SCHEMA = new Param(JDBCDataStoreFactory.SCHEMA.key, String.class, "Schema", false, "sys");
 
    
     protected void setupParameters(Map parameters) {
@@ -74,6 +74,11 @@ public class MonetDBDataStoreFactory extends JDBCDataStoreFactory {
         
         parameters.remove(JDBCDataStoreFactory.PORT.key);
         parameters.put(PORT.key, PORT);
+        
+        parameters.remove(JDBCDataStoreFactory.SCHEMA.key);
+        parameters.put(SCHEMA.key, SCHEMA);
+        
+        parameters.remove(JDBCDataStoreFactory.FETCHSIZE.key);
     }
 
     public String getDisplayName() {
@@ -95,6 +100,16 @@ public class MonetDBDataStoreFactory extends JDBCDataStoreFactory {
     protected SQLDialect createSQLDialect(JDBCDataStore dataStore) {
     	 return new MonetDBDialect(dataStore);
     }
+    
+    @Override
+    protected JDBCDataStore createDataStoreInternal(JDBCDataStore dataStore, Map params)
+            throws IOException {
+    		// disable fetch size
+    		// not fully supported by MonetDB 	
+    		dataStore.setFetchSize(0);
+    	
+            return dataStore;
+        }
 
      @Override
     protected String getValidationQuery() {

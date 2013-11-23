@@ -262,6 +262,16 @@ class FilterToSqlHelper {
         }
         
         // add && filter if possible
+        if(!(filter instanceof Disjoint)) {
+        	out.write("mbroverlaps(mbr(");
+        	property.accept(delegate, extraData);
+            out.write("), mbr(");
+            geometry.accept(delegate, extraData);
+            out.write("))");
+                
+            out.write(" AND ");
+        }
+        
        /* if(!(filter instanceof Disjoint)) {
             
         	out.write("Overlaps(");

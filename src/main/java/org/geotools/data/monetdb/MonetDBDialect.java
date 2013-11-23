@@ -596,7 +596,8 @@ public class MonetDBDialect extends BasicSQLDialect {
     
     @Override
     public boolean isLimitOffsetSupported() {
-        return true;
+    	return false;
+        //return true;
     }
     
     @Override
