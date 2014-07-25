@@ -283,16 +283,18 @@ public class MonetDBDialect extends BasicSQLDialect {
             try {
                 if (rs.next()) {
                 	String defaultValue = rs.getString(1);
-                	
-                	Pattern regex = Pattern.compile("\"seq_(.*?)\"");
-                	Matcher m = regex.matcher(defaultValue);
-                	
-                	String seqName = null;
-                	while(m.find()) {
-                		seqName = "seq_" + m.group(1);
-                	}
+                        
+                        if (defaultValue != null) {                	
+                            Pattern regex = Pattern.compile("\"seq_(.*?)\"");
+                            Matcher m = regex.matcher(defaultValue);
 
-                	return seqName;
+                            String seqName = null;
+                            while(m.find()) {
+                                    seqName = "seq_" + m.group(1);
+                            }
+
+                            return seqName;
+                        }
                 }
             } finally {
                 dataStore.closeSafe(rs);
